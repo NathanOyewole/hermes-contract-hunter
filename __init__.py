@@ -213,8 +213,8 @@ Examples:
 def register(ctx) -> None:
     ctx.register_tool(
         "scout_radar",
-        description="Pull bounty targets from a radar source (immunefi, sourcify, dexscreener).",
-        parameters={
+        toolset="contract-hunter",
+        schema={
             "type": "object",
             "properties": {
                 "source": {"type": "string", "default": "immunefi", "description": "Radar source"},
@@ -222,11 +222,12 @@ def register(ctx) -> None:
             },
         },
         handler=lambda args, **kw: _scout_radar(args.get("source", "immunefi"), args.get("limit", 10)),
+        description="Pull bounty targets from a radar source (immunefi, sourcify, dexscreener).",
     )
     ctx.register_tool(
         "scout_surface",
-        description="Surface a target contract — fetch source, ABI, metadata.",
-        parameters={
+        toolset="contract-hunter",
+        schema={
             "type": "object",
             "properties": {
                 "target_id": {"type": "string", "description": "Target ID from radar"},
@@ -234,11 +235,12 @@ def register(ctx) -> None:
             "required": ["target_id"],
         },
         handler=lambda args, **kw: _scout_surface(args["target_id"]),
+        description="Surface a target contract — fetch source, ABI, metadata.",
     )
     ctx.register_tool(
         "scout_prove",
-        description="Prove a vulnerability hypothesis on a local Anvil fork.",
-        parameters={
+        toolset="contract-hunter",
+        schema={
             "type": "object",
             "properties": {
                 "target_id": {"type": "string", "description": "Target ID"},
@@ -247,11 +249,12 @@ def register(ctx) -> None:
             "required": ["target_id"],
         },
         handler=lambda args, **kw: _scout_prove(args["target_id"], args.get("hypothesis", "")),
+        description="Prove a vulnerability hypothesis on a local Anvil fork.",
     )
     ctx.register_tool(
         "scout_report",
-        description="Generate a professional vulnerability report for a proven finding.",
-        parameters={
+        toolset="contract-hunter",
+        schema={
             "type": "object",
             "properties": {
                 "target_id": {"type": "string", "description": "Target ID"},
@@ -259,12 +262,14 @@ def register(ctx) -> None:
             "required": ["target_id"],
         },
         handler=lambda args, **kw: _scout_report(args["target_id"]),
+        description="Generate a professional vulnerability report for a proven finding.",
     )
     ctx.register_tool(
         "scout_status",
-        description="Check current hunting status and recent findings.",
-        parameters={"type": "object", "properties": {}},
+        toolset="contract-hunter",
+        schema={"type": "object", "properties": {}},
         handler=lambda args, **kw: _scout_status(),
+        description="Check current hunting status and recent findings.",
     )
 
     ctx.register_hook("on_session_start", _on_session_start)
