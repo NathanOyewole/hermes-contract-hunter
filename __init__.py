@@ -212,6 +212,10 @@ Examples:
         if len(parts) < 2:
             return "Usage: /hunt report <target_id>"
         return _scout_report(parts[1])
+    elif sub == "serve":
+        port = parts[1] if len(parts) > 1 else "9090"
+        result = _run_scout(["serve", "--port", port])
+        return f"Scout serve started on port {port}.\n{result.get('stdout', '')}\n\nFor public access, run:\n  cloudflared tunnel --url http://localhost:{port}"
     elif sub == "status":
         return _scout_status()
     else:
