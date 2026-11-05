@@ -10,13 +10,8 @@ hermes plugins install NathanOyewole/hermes-contract-hunter
 
 ## Setup
 
-Set the `SCOUT_PATH` environment variable to point to your Scout binary:
+Scout is auto-detected from common paths (`~/.cargo/bin/scout`, `/usr/local/bin/scout`). No `SCOUT_PATH` needed. Or install Scout first:
 
-```bash
-export SCOUT_PATH=/path/to/scout
-```
-
-Or install Scout first:
 ```bash
 cargo install --path /path/to/scout
 ```
@@ -25,11 +20,21 @@ cargo install --path /path/to/scout
 
 ### Slash Command
 ```
+/hunt setup               # Verify Scout is installed
+/hunt demo                # Quick demo radar pull
 /hunt radar immunefi 5    # Pull 5 new bounty targets
 /hunt surface 42          # Surface target #42
 /hunt prove 42 "reentrancy in withdraw"  # Prove hypothesis
 /hunt report 42           # Generate vulnerability report
 /hunt status              # Check hunting status
+```
+
+### Web Dashboard
+Scout includes a built-in web dashboard accessible from any device:
+```bash
+scout serve --port 8080
+# Access at http://localhost:8080 or http://<your-ip>:8080
+# For public access: cloudflared tunnel --url http://localhost:8080
 ```
 
 ### Tools (for agent use)
