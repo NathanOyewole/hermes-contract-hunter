@@ -61,12 +61,19 @@ def _run_scout(args: list[str], timeout: int = 120) -> dict[str, Any]:
                 "Or run: /hunt setup"
             ),
         }
+    # Minimal env — do not inherit Hermes provider API keys
+    minimal_env = {
+        "PATH": os.environ.get("PATH", ""),
+        "HOME": os.environ.get("HOME", ""),
+        "USER": os.environ.get("USER", ""),
+    }
     try:
         result = subprocess.run(
             [scout] + args,
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=minimal_env,
         )
         return {
             "stdout": result.stdout,
@@ -96,7 +103,9 @@ def _clean_id(raw: str) -> str:
 
 def _scout_surface(target_id: str) -> str:
     target_id = _clean_id(target_id)
-    result = _run_scout(["source", target_id])
+    if target_id.startswith("-"):
+        return "Invalid target ID (cannot start with -)."
+    result = _run_scout(["source", "--", target_id])
     if result["success"]:
         return f"Surface complete for target {target_id}.\n{result['stdout']}"
     return f"Surface failed: {result.get('error', result.get('stderr', 'unknown'))}"
@@ -104,9 +113,12 @@ def _scout_surface(target_id: str) -> str:
 
 def _scout_prove(target_id: str, hypothesis: str = "") -> str:
     target_id = _clean_id(target_id)
-    args = ["prove", target_id]
+    if target_id.startswith("-"):
+        return "Invalid target ID (cannot start with -)."
+    args = ["prove"]
     if hypothesis:
         args += ["--hypothesis", hypothesis]
+    args += ["--", target_id]
     result = _run_scout(args, timeout=300)
     if result["success"]:
         return f"Proof complete for target {target_id}.\n{result['stdout']}"
@@ -115,7 +127,9 @@ def _scout_prove(target_id: str, hypothesis: str = "") -> str:
 
 def _scout_report(target_id: str) -> str:
     target_id = _clean_id(target_id)
-    result = _run_scout(["report", target_id])
+    if target_id.startswith("-"):
+        return "Invalid target ID (cannot start with -)."
+    result = _run_scout(["report", "--", target_id])
     if result["success"]:
         return f"Report generated for target {target_id}.\n{result['stdout']}"
     return f"Report failed: {result.get('error', result.get('stderr', 'unknown'))}"
@@ -153,17 +167,6 @@ def _hunt_demo() -> str:
     if result["success"]:
         return f"Demo radar pull:\n{result['stdout']}\n\nNow use /hunt surface <id> to analyze a target."
     return f"Demo failed: {result.get('error', result.get('stderr', 'unknown'))}"
-
-
-def _on_session_start(**kwargs) -> None:
-    """On session start, check for new bounty targets."""
-    logger.info("Contract Hunter: checking for new bounty targets on session start")
-    try:
-        result = _run_scout(["pull", "--source", "immunefi", "--limit", "5"], timeout=30)
-        if result["success"]:
-            logger.info("Contract Hunter: radar pull on session start completed")
-    except Exception as e:
-        logger.debug("Contract Hunter: session start radar check failed: %s", e)
 
 
 def _handle_hunt(raw_args: str) -> Optional[str]:
@@ -284,7 +287,27 @@ def register(ctx) -> None:
         description="Check current hunting status and recent findings.",
     )
 
+    def _on_session_start(**kwargs) -> None:
+        """On session start, optionally check for new bounty targets."""
+        if not ctx.get_config("auto_pull_immunefi", False):
+            return
+        logger.info("Contract Hunter: auto-pull Immunefi enabled, checking for new targets")
+        try:
+            result = _run_scout(["pull", "--source", "immunefi", "--limit", "5"], timeout=30)
+            if result["success"]:
+                logger.info("Contract Hunter: radar pull on session start completed")
+        except Exception as e:
+            logger.debug("Contract Hunter: session start radar check failed: %s", e)
+
     ctx.register_hook("on_session_start", _on_session_start)
 
-    ctx.register_command("hunt", handler=_handle_hunt,
-                         description="Contract hunting: radar → surface → prove → report.")
+    # Register the bundled skill so it actually ships
+    skill_md = Path(__file__).parent / "skills" / "contract-hunting" / "SKILL.md"
+    if skill_md.exists():
+        ctx.register_skill("contract-hunting", skill_md)
+
+    ctx.register_command(
+        "hunt",
+        handler=_handle_hunt,
+        description="Contract hunting: radar → surface → prove → report.",
+    )

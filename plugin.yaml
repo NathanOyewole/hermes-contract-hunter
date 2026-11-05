@@ -1,6 +1,6 @@
 name: contract-hunter
-version: 1.1.0
-description: "On-chain contract vulnerability hunter powered by Scout. Radar → surface → prove → report pipeline for EVM bounty programs. Auto-monitors Immunefi for new targets."
+version: 1.2.0
+description: "On-chain contract vulnerability hunter powered by Scout. Radar → surface → prove → report pipeline for EVM bounty programs."
 author: "NathanOyewole"
 provides_hooks:
   - on_session_start
@@ -12,5 +12,8 @@ provides_tools:
   - scout_status
 provides_commands:
   - hunt
-requires_env:
-  - SCOUT_PATH
+config_schema:
+  auto_pull_immunefi:
+    type: bool
+    default: false
+    description: "Run an Immunefi radar pull on every session start (blocks startup, makes network calls). Off by default."

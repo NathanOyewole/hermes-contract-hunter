@@ -13,7 +13,8 @@ hermes plugins install NathanOyewole/hermes-contract-hunter
 Scout is auto-detected from common paths (`~/.cargo/bin/scout`, `/usr/local/bin/scout`). No `SCOUT_PATH` needed. Or install Scout first:
 
 ```bash
-cargo install --path /path/to/scout
+git clone https://github.com/NathanOyewole/scout.git
+cd scout && cargo install --path .
 ```
 
 ## Usage
@@ -45,7 +46,7 @@ scout serve --port 8080
 - `scout_status` — Check hunting status
 
 ### Hooks
-- `on_session_start` — Auto-checks for new bounty targets when a session starts
+- `on_session_start` — Optionally checks for new Immunefi targets (off by default; controlled by `auto_pull_immunefi` setting)
 
 ## How It Works
 
@@ -53,6 +54,16 @@ scout serve --port 8080
 2. **Surface** — Fetches contract source code, ABI, and metadata
 3. **Prove** — Tests vulnerability hypotheses on a local Anvil fork
 4. **Report** — Generates professional vulnerability reports ready for submission
+
+## Disclosures
+
+This plugin wraps the external `scout` CLI (source: https://github.com/NathanOyewole/scout). When tools are invoked:
+
+- **Network calls**: `radar` contacts Immunefi, Sourcify, and/or DexScreener (depending on source).
+- **Local Anvil fork**: `prove` executes exploit transactions against a local Anvil fork. The fork RPC is determined by Scout (typically a public Ethereum mainnet endpoint or the one configured in Scout).
+- **Session-start pull**: An optional Immunefi radar pull can run on session start. It is **off by default** and controlled by the `auto_pull_immunefi` plugin setting. When enabled it blocks briefly and makes a network call.
+
+The Scout binary itself must be installed separately and is the component that performs the actual network and fork work. Review the Scout source before use.
 
 ## License
 
