@@ -114,7 +114,7 @@ def _scout_report(target_id: str) -> str:
 
 
 def _scout_status() -> str:
-    result = _run_scout(["status"])
+    result = _run_scout(["list"])
     if result["success"]:
         return f"Hunting status:\n{result['stdout']}"
     return f"Status check failed: {result.get('error', result.get('stderr', 'unknown'))}"
