@@ -6,25 +6,64 @@ into Hermes as native tools, hooks, and slash commands.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
+import shutil
 import subprocess
-import sqlite3
 from pathlib import Path
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-SCOUT_BIN = os.getenv("SCOUT_PATH", "scout")
-DB_PATH = None
+_SCOUT_BIN: Optional[str] = None
+
+
+def _find_scout() -> Optional[str]:
+    """Auto-detect Scout binary from common install paths."""
+    env_path = os.getenv("SCOUT_PATH")
+    if env_path and os.path.isfile(env_path) and os.access(env_path, os.X_OK):
+        return env_path
+
+    common_paths = [
+        os.path.expanduser("~/.cargo/bin/scout"),
+        "/usr/local/bin/scout",
+        "/usr/bin/scout",
+        os.path.expanduser("~/.local/bin/scout"),
+    ]
+    for p in common_paths:
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+
+    found = shutil.which("scout")
+    if found:
+        return found
+
+    return None
+
+
+def _get_scout() -> Optional[str]:
+    global _SCOUT_BIN
+    if _SCOUT_BIN is None:
+        _SCOUT_BIN = _find_scout()
+    return _SCOUT_BIN
 
 
 def _run_scout(args: list[str], timeout: int = 120) -> dict[str, Any]:
     """Run a scout CLI command and return parsed output."""
+    scout = _get_scout()
+    if scout is None:
+        return {
+            "success": False,
+            "error": (
+                "Scout binary not found. Install it with:\n"
+                "  cargo install --path /path/to/scout\n"
+                "Or set SCOUT_PATH env var to the binary location.\n"
+                "Or run: /hunt setup"
+            ),
+        }
     try:
         result = subprocess.run(
-            [SCOUT_BIN] + args,
+            [scout] + args,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -36,7 +75,7 @@ def _run_scout(args: list[str], timeout: int = 120) -> dict[str, Any]:
             "success": result.returncode == 0,
         }
     except FileNotFoundError:
-        return {"success": False, "error": f"Scout binary not found at {SCOUT_BIN}. Set SCOUT_PATH env var."}
+        return {"success": False, "error": f"Scout binary not found at {scout}. Run: /hunt setup"}
     except subprocess.TimeoutExpired:
         return {"success": False, "error": f"Scout command timed out after {timeout}s."}
     except Exception as e:
@@ -44,7 +83,6 @@ def _run_scout(args: list[str], timeout: int = 120) -> dict[str, Any]:
 
 
 def _scout_radar(source: str = "immunefi", limit: int = 10) -> str:
-    """Pull bounty targets from a radar source."""
     result = _run_scout(["pull", "--source", source, "--limit", str(limit)])
     if result["success"]:
         return f"Radar pull complete.\n{result['stdout']}"
@@ -52,7 +90,6 @@ def _scout_radar(source: str = "immunefi", limit: int = 10) -> str:
 
 
 def _scout_surface(target_id: str) -> str:
-    """Surface a target contract."""
     result = _run_scout(["source", target_id])
     if result["success"]:
         return f"Surface complete for target {target_id}.\n{result['stdout']}"
@@ -60,7 +97,6 @@ def _scout_surface(target_id: str) -> str:
 
 
 def _scout_prove(target_id: str, hypothesis: str = "") -> str:
-    """Prove a vulnerability hypothesis on a local fork."""
     args = ["prove", target_id]
     if hypothesis:
         args += ["--hypothesis", hypothesis]
@@ -71,7 +107,6 @@ def _scout_prove(target_id: str, hypothesis: str = "") -> str:
 
 
 def _scout_report(target_id: str) -> str:
-    """Generate a vulnerability report."""
     result = _run_scout(["report", target_id])
     if result["success"]:
         return f"Report generated for target {target_id}.\n{result['stdout']}"
@@ -79,17 +114,42 @@ def _scout_report(target_id: str) -> str:
 
 
 def _scout_status() -> str:
-    """Check hunting status and recent findings."""
     result = _run_scout(["status"])
     if result["success"]:
         return f"Hunting status:\n{result['stdout']}"
     return f"Status check failed: {result.get('error', result.get('stderr', 'unknown'))}"
 
 
+def _hunt_setup() -> str:
+    """Check if Scout is installed and provide install instructions."""
+    scout = _get_scout()
+    if scout:
+        return f"Scout found at: {scout}\n\nYou're ready to hunt! Use /hunt radar to get started."
+    return (
+        "Scout not found. Install it:\n\n"
+        "1. Install Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh\n"
+        "2. Clone Scout: git clone https://github.com/NathanOyewole/scout.git\n"
+        "3. Build: cd scout && cargo install --path .\n"
+        "4. Verify: scout --version\n\n"
+        "Or set SCOUT_PATH=/path/to/scout binary.\n"
+        "Then restart Hermes."
+    )
+
+
+def _hunt_demo() -> str:
+    """Run a demo on a known vulnerable contract."""
+    scout = _get_scout()
+    if not scout:
+        return "Scout not found. Run /hunt setup first."
+    result = _run_scout(["pull", "--source", "immunefi", "--limit", "1"], timeout=30)
+    if result["success"]:
+        return f"Demo radar pull:\n{result['stdout']}\n\nNow use /hunt surface <id> to analyze a target."
+    return f"Demo failed: {result.get('error', result.get('stderr', 'unknown'))}"
+
+
 def _on_session_start(**kwargs) -> None:
     """On session start, check for new bounty targets."""
     logger.info("Contract Hunter: checking for new bounty targets on session start")
-    # Non-blocking: just log, don't block session
     try:
         result = _run_scout(["pull", "--source", "immunefi", "--limit", "5"], timeout=30)
         if result["success"]:
@@ -99,20 +159,23 @@ def _on_session_start(**kwargs) -> None:
 
 
 def _handle_hunt(raw_args: str) -> Optional[str]:
-    """Slash command: /hunt <subcommand> [args]"""
     parts = raw_args.strip().split()
     if not parts or parts[0] in {"help", "-h", "--help"}:
         return """\
 /hunt — Contract Hunter powered by Scout
 
 Subcommands:
-  radar [source] [limit]   Pull bounty targets (default: immunefi, 10)
-  surface <id>             Surface a target contract
-  prove <id> [hypothesis]  Prove a vulnerability on local fork
-  report <id>              Generate vulnerability report
-  status                   Check hunting status
+  setup                      Check/install Scout
+  demo                       Run a demo radar pull
+  radar [source] [limit]     Pull bounty targets (default: immunefi, 10)
+  surface <id>               Surface a target contract
+  prove <id> [hypothesis]    Prove a vulnerability on local fork
+  report <id>                Generate vulnerability report
+  status                     Check hunting status
 
 Examples:
+  /hunt setup
+  /hunt demo
   /hunt radar immunefi 5
   /hunt surface 42
   /hunt prove 42 "reentrancy in withdraw"
@@ -120,7 +183,11 @@ Examples:
   /hunt status
 """
     sub = parts[0]
-    if sub == "radar":
+    if sub == "setup":
+        return _hunt_setup()
+    elif sub == "demo":
+        return _hunt_demo()
+    elif sub == "radar":
         source = parts[1] if len(parts) > 1 else "immunefi"
         limit = int(parts[2]) if len(parts) > 2 else 10
         return _scout_radar(source, limit)
@@ -144,7 +211,6 @@ Examples:
 
 
 def register(ctx) -> None:
-    # Register tools
     ctx.register_tool(
         "scout_radar",
         description="Pull bounty targets from a radar source (immunefi, sourcify, dexscreener).",
@@ -159,7 +225,7 @@ def register(ctx) -> None:
     )
     ctx.register_tool(
         "scout_surface",
-        description="Surface a target contract — fetch source, ABI, and metadata.",
+        description="Surface a target contract — fetch source, ABI, metadata.",
         parameters={
             "type": "object",
             "properties": {
@@ -201,9 +267,7 @@ def register(ctx) -> None:
         handler=lambda args, **kw: _scout_status(),
     )
 
-    # Register hooks
     ctx.register_hook("on_session_start", _on_session_start)
 
-    # Register slash command
     ctx.register_command("hunt", handler=_handle_hunt,
                          description="Contract hunting: radar → surface → prove → report.")
