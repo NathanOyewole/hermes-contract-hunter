@@ -1,5 +1,5 @@
 name: contract-hunter
-version: 1.0.0
+version: 1.1.0
 description: "On-chain contract vulnerability hunter powered by Scout. Radar → surface → prove → report pipeline for EVM bounty programs. Auto-monitors Immunefi for new targets."
 author: "NathanOyewole"
 provides_hooks:
