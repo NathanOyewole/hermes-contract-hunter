@@ -89,7 +89,13 @@ def _scout_radar(source: str = "immunefi", limit: int = 10) -> str:
     return f"Radar pull failed: {result.get('error', result.get('stderr', 'unknown'))}"
 
 
+def _clean_id(raw: str) -> str:
+    """Strip angle brackets and whitespace from target IDs."""
+    return raw.strip().strip("<>").strip()
+
+
 def _scout_surface(target_id: str) -> str:
+    target_id = _clean_id(target_id)
     result = _run_scout(["source", target_id])
     if result["success"]:
         return f"Surface complete for target {target_id}.\n{result['stdout']}"
@@ -97,6 +103,7 @@ def _scout_surface(target_id: str) -> str:
 
 
 def _scout_prove(target_id: str, hypothesis: str = "") -> str:
+    target_id = _clean_id(target_id)
     args = ["prove", target_id]
     if hypothesis:
         args += ["--hypothesis", hypothesis]
@@ -107,6 +114,7 @@ def _scout_prove(target_id: str, hypothesis: str = "") -> str:
 
 
 def _scout_report(target_id: str) -> str:
+    target_id = _clean_id(target_id)
     result = _run_scout(["report", target_id])
     if result["success"]:
         return f"Report generated for target {target_id}.\n{result['stdout']}"
